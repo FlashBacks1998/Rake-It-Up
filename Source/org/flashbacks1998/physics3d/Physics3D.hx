@@ -386,37 +386,28 @@ class Physics3D {
             if (col == null) continue;
             if (!(col.a.isSensor || col.b.isSensor)) continue;
 
-            // Figure out the sensor/object pairing once, then dispatch on both
-            // endpoints with pooled events (Phase 3A).
-            var sensor:IPhysics3DObject;
-            var other:IPhysics3DObject;
+            // Figure out the sensor/object pairing once, then dispatch on
+            // both endpoints. We allocate a fresh event per dispatch — the
+            // original Phase 3A pool fix tripped Flash's `dispatchEvent`
+            // internal clone path (TypeError #1034) because Flash clones any
+            // event re-used after a previous dispatch. The performance gain
+            // was negligible, and Flash allocates a clone per re-dispatch
+            // anyway, so direct allocation is both correct and roughly equal
+            // cost.
             if (col.a.isSensor && !col.b.isSensor) {
-                sensor = col.a; other = col.b;
+                final sensor = col.a, other = col.b;
+                sensor.dispatchEvent(new Physics3DEventReachedSensor(sensor, other));
+                other.dispatchEvent(new Physics3DEventReachedSensor(sensor, other));
             } else if (col.b.isSensor && !col.a.isSensor) {
-                sensor = col.b; other = col.a;
+                final sensor = col.b, other = col.a;
+                sensor.dispatchEvent(new Physics3DEventReachedSensor(sensor, other));
+                other.dispatchEvent(new Physics3DEventReachedSensor(sensor, other));
             } else {
-                // both sensors — original behaviour dispatched both sides as
-                // (sensor=b, object=a) on a and (sensor=a, object=b) on b. We
-                // keep that shape with two separate pooled events.
-                final e1 = Physics3DEventReachedSensor.acquire(col.b, col.a);
-                col.a.dispatchEvent(e1);
-                Physics3DEventReachedSensor.release(e1);
-
-                final e2 = Physics3DEventReachedSensor.acquire(col.a, col.b);
-                col.b.dispatchEvent(e2);
-                Physics3DEventReachedSensor.release(e2);
-                continue;
+                // Both sensors — preserve the legacy "swap" dispatch shape:
+                // a receives (sensor=b, object=a), b receives (sensor=a, object=b).
+                col.a.dispatchEvent(new Physics3DEventReachedSensor(col.b, col.a));
+                col.b.dispatchEvent(new Physics3DEventReachedSensor(col.a, col.b));
             }
-
-            // Sensor-vs-object: both endpoints receive an event whose
-            // `.sensor` is the sensor and `.object` is the non-sensor body.
-            final e1 = Physics3DEventReachedSensor.acquire(sensor, other);
-            sensor.dispatchEvent(e1);
-            Physics3DEventReachedSensor.release(e1);
-
-            final e2 = Physics3DEventReachedSensor.acquire(sensor, other);
-            other.dispatchEvent(e2);
-            Physics3DEventReachedSensor.release(e2);
         }
     }
  
