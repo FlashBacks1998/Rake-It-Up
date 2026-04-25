@@ -1,5 +1,9 @@
 package org.flashbacks1998.rake.scenes.tests;
 
+import motion.Actuate;
+
+import openfl.display.Shape;
+import openfl.display.MovieClip;
 import openfl.media.SoundChannel;
 import org.flashbacks1998.rake.ui.HighScoresWindow;
 import io.newgrounds.NGLite.LoginOutcome;
@@ -135,10 +139,15 @@ class SceneTestSR01 extends Scene {
     var cameraSliderUI:SliderUI;
     private var sprMagnifier:Sprite;
     private var txtScore:TextField;
+    private var sprTutorialBackground:Shape;
+    private var mcButtons:MovieClip;
+    private var mcMouse:MovieClip;
+    private var mcZoom:MovieClip;
     // haxeui Stack: toggles between mainScreen (game HUD), settingsScreen
     // (settings panel), and highScoresScreen (leaderboard) via selectedId.
     // Replaces the old nonSettingsUIContainer Sprite + manual visibility.
     private var screenStack:Stack;
+    private var tutorialContainer:Sprite;
     private var mainScreen:Absolute;
     private var settingsScreen:Absolute;
     private var highScoresScreen:Absolute;
@@ -199,8 +208,10 @@ class SceneTestSR01 extends Scene {
     public function onAddedToStage(?e:openfl.events.Event) {
         Debugger.log("onAddedToStage: updating ui and playing background music");
         
-        updateUIPosition(); 
+        Actuate.tween (tutorialContainer, 1, { alpha: 0 }).delay (8);
 
+        updateUIPosition(); 
+ 
         if (_sBackgroundMusic != null) 
             _scBackgroundMusic = _sBackgroundMusic.play(0, 0);
     }
@@ -361,10 +372,14 @@ class SceneTestSR01 extends Scene {
         screenStack.id = "screenStack";
         addChild(screenStack);
 
+        tutorialContainer = new Sprite(); 
+
         mainScreen = new Absolute();
         mainScreen.id = "mainScreen";
         mainScreen.percentWidth = 100;
         mainScreen.percentHeight = 100;
+        
+        mainScreen.addChild(tutorialContainer);
 
         settingsScreen = new Absolute();
         settingsScreen.id = "settingsScreen";
@@ -451,20 +466,50 @@ class SceneTestSR01 extends Scene {
         viewHighScores.onClose = onHighScoresClose;
         highScoresScreen.addComponent(viewHighScores);
 
-        // Wire frames into the stack — main shows first.
+        // Tutorial Library
+        sprTutorialBackground = new Shape();
+        tutorialContainer.addChild(sprTutorialBackground);
+        tutorialContainer.mouseEnabled = false; // let mouse events pass through to the stage (for rake dragging) while tutorial is visible
+        final fAssetsTutorial = Assets.loadLibrary("tutorial").then(_->{ 
+            Debugger.log("Tutorial library loaded, instantiating movie clips");
+            final fButtons = Assets.loadMovieClip("tutorial:mcTutorialButtons").then(mc->{
+                mcButtons = cast mc;
+                tutorialContainer.addChild(mcButtons);
+                Debugger.log("mcTutorialButtons loaded and added to tutorialContainer");
+                return Future.withValue(mcButtons);
+            });
+
+            final fMouse = Assets.loadMovieClip("tutorial:mcTutorialMouse").then(mc->{
+                mcMouse = cast mc;
+                tutorialContainer.addChild(mcMouse);
+                Debugger.log("mcTutorialMouse loaded and added to tutorialContainer");
+                return Future.withValue(mcMouse);
+            });
+
+            final fZoom = Assets.loadMovieClip("tutorial:mcTutorialZoom").then(mc->{
+                mcZoom = cast mc;
+                tutorialContainer.addChild(mcZoom);
+                Debugger.log("mcTutorialZoom loaded and added to tutorialContainer");
+                return Future.withValue(mcZoom);
+            });
+
+            return FutureUtil.all([fButtons, fMouse, fZoom]).then(_->Future.withValue(tutorialContainer));
+        });
+
+        // Wire frames into the stack — main shows first. 
         screenStack.addComponent(mainScreen);
         screenStack.addComponent(settingsScreen);
         screenStack.addComponent(highScoresScreen);
         screenStack.selectedId = "mainScreen";
 
-        updateUIPosition();
+        //updateUIPosition();
 
         addEventListener(Event.ADDED_TO_STAGE, onAddedToStage);
         addEventListener(Event.ENTER_FRAME, onEnterFrame);
         Lib.current.stage.addEventListener(Event.RESIZE, onStageResize);
         Lib.current.stage.addEventListener(MouseEvent.MOUSE_WHEEL, onMouseScrollToZoomCamera);
 
-        return Future.withValue(Lib.current.stage);
+        return FutureUtil.all([fAssetsTutorial]).then(_ -> Future.withValue(Lib.current.stage));
     }
 
     public function initNewgrounds():Future<Dynamic> {
@@ -577,6 +622,24 @@ class SceneTestSR01 extends Scene {
         viewHighScores.height = Lib.current.stage.stageHeight * .9;
         viewHighScores.left = (Lib.current.stage.stageWidth  - viewHighScores.width)  / 2;
         viewHighScores.top  = (Lib.current.stage.stageHeight - viewHighScores.height) / 2;
+
+
+        sprTutorialBackground.graphics.clear();
+        sprTutorialBackground.graphics.beginFill(0xDBDBDB, 0.75);
+        sprTutorialBackground.graphics.drawRect(0, 0, Lib.current.stage.stageWidth, Lib.current.stage.stageHeight);
+        sprTutorialBackground.graphics.endFill();
+
+        // Jeesus i need a better layout system 
+        mcButtons.x = 96;
+        mcButtons.y = 16;
+        mcButtons.scaleX = mcButtons.scaleY = 0.8;
+
+        mcZoom.x = sprMagnifier.x;
+        mcZoom.y = sprMagnifier.y - 90;
+        mcZoom.scaleX = mcZoom.scaleY = 0.83;
+
+        mcMouse.x = (Lib.current.stage.stageWidth - mcMouse.width) / 2;
+        mcMouse.y = (Lib.current.stage.stageHeight - mcMouse.height) / 2;
     }
 
     public function updateCameraDistance(distance:Float) {

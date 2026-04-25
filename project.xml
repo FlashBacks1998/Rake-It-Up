@@ -6,16 +6,17 @@
 	<window width="1200" height="800" unless="html5" />
 	
 	<source path="Source" />
-	
+	 
 	<haxelib name="openfl" path="../openfl" />
 	<haxelib name="newgrounds" />
 	<haxelib name="haxeui-core" path="../haxeui-core" />
 	<haxelib name="haxeui-openfl" path="../haxeui-openfl" />
+	<haxelib name="actuate" />
 
 	<!-- Phase 3 compiled stylesheet matcher (verified by test01 over many bursts) -->
 	<haxedef name="haxeui_compiled_matcher" />
 
 	<assets path="Assets" rename="assets" />
-	
+	<library path="Assets/libraries/tutorial.swf" />	
 	
 </project>
