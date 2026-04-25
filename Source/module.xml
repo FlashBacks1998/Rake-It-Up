@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<module id="fall">
+    <resources>
+        <resource path="styles" prefix="styles" />
+    </resources>
+    <themes>
+        <fall parent="default">
+            <style resource="styles/fall.css" />
+        </fall>
+    </themes>
+</module>

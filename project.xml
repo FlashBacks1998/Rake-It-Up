@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project>
+	
+	<meta title="Knight" package="com.sample.tossup" version="1.0.0" company="Company Name" /> 
+	<app main="Main" path="Export" file="Fall" preloader="org.flashbacks1998.rake.Preloader" />
+	<window width="1200" height="800" unless="html5" />
+	
+	<source path="Source" />
+	
+	<haxelib name="openfl" path="../openfl" />
+	<haxelib name="newgrounds" />
+	<haxelib name="haxeui-core" path="../haxeui-core" />
+	<haxelib name="haxeui-openfl" path="../haxeui-openfl" />
+
+	<!-- Phase 3 compiled stylesheet matcher (verified by test01 over many bursts) -->
+	<haxedef name="haxeui_compiled_matcher" />
+
+	<assets path="Assets" rename="assets" />
+	
+	
+</project>
