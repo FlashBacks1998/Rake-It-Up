@@ -23,6 +23,16 @@ class Newgrounds {
 
     public static inline var SCOREBOARD_ID = 15835;
     public static inline var DEFAULT_SAVE_SLOT_ID = 1;
+    /** Cloud slot used to persist the GnomeSystem hscript source. */
+    public static inline var GNOME_SOURCE_SLOT_ID = 2;
+
+    // ------------------------------------------------------------------
+    // MEDAL IDs
+    // ------------------------------------------------------------------
+    /** "Passed the starting line." — 10k points reached. */
+    public static inline var MEDAL_PASSED_STARTING_LINE = 89946;
+    /** "Gnome modification" — user-modified hscript ran successfully. */
+    public static inline var MEDAL_GNOME_MODIFICATION = 89947;
 
     /**
      * Bootstraps NG.core. If `sessionId` isn't explicitly passed, picks up
@@ -209,9 +219,10 @@ class Newgrounds {
      * accessors (`safeSaveSlot`, `getBoard`) for ongoing access.
      */
     public static function loadCoreData(?onReady:Void->Void):Void {
-        Debugger.log("Newgrounds.loadCoreData: loading save slots + scoreboards");
+        Debugger.log("Newgrounds.loadCoreData: loading save slots + scoreboards + medals");
         NG.core.saveSlots.loadList();
         NG.core.scoreBoards.loadList();
+        NG.core.medals.loadList();
         if (onReady == null) return;
 
         var remaining = 0;
@@ -221,6 +232,7 @@ class Newgrounds {
         }
         if (NG.core.saveSlots.state != Loaded)   { remaining++; NG.core.saveSlots.onLoad.addOnce(bump); }
         if (NG.core.scoreBoards.state != Loaded) { remaining++; NG.core.scoreBoards.onLoad.addOnce(bump); }
+        if (NG.core.medals.state != Loaded)      { remaining++; NG.core.medals.onLoad.addOnce(bump); }
         if (remaining == 0) onReady();
     }
 
@@ -368,6 +380,70 @@ class Newgrounds {
     }
 
     /**
+     * Saves arbitrary text (e.g. the GnomeSystem hscript source) to its own
+     * cloud slot. No-op (with log) if NG isn't ready or the slot list hasn't
+     * loaded yet — same guards as `saveCloudScore`.
+     */
+    public static function saveCloudGnomeSource(source:String):Void {
+        if (NG.core == null || NG.core.saveSlots == null) {
+            Debugger.log("Newgrounds.saveCloudGnomeSource: NG not initialized, cannot save");
+            return;
+        }
+        if (NG.core.saveSlots.state != Loaded) {
+            Debugger.log("Newgrounds.saveCloudGnomeSource: slots not loaded, skipping");
+            return;
+        }
+        var slot = safeSaveSlot(GNOME_SOURCE_SLOT_ID);
+        if (slot == null) {
+            Debugger.log("Newgrounds.saveCloudGnomeSource: slot unavailable, cannot save");
+            return;
+        }
+        Debugger.log("Newgrounds.saveCloudGnomeSource:", (source != null ? source.length : 0), "chars");
+        try {
+            slot.save(source != null ? source : "");
+        } catch (e:Dynamic) {
+            Debugger.log("Newgrounds.saveCloudGnomeSource: save threw", e);
+        }
+    }
+
+    /**
+     * Loads the cached GnomeSystem source (slot #GNOME_SOURCE_SLOT_ID) and
+     * calls onLoaded with the string (or null if unavailable / empty / errored).
+     */
+    public static function loadCloudGnomeSourceWithCallback(onLoaded:String->Void):Void {
+        if (NG.core == null || NG.core.saveSlots == null) {
+            Debugger.log("Newgrounds.loadCloudGnomeSourceWithCallback: NG not initialized");
+            onLoaded(null);
+            return;
+        }
+        if (NG.core.saveSlots.state != Loaded) {
+            Debugger.log("Newgrounds.loadCloudGnomeSourceWithCallback: slots not loaded yet, deferring");
+            NG.core.saveSlots.onLoad.addOnce(function() loadCloudGnomeSourceWithCallback(onLoaded));
+            return;
+        }
+        var slot = safeSaveSlot(GNOME_SOURCE_SLOT_ID);
+        if (slot == null || slot.isEmpty()) {
+            Debugger.log("Newgrounds.loadCloudGnomeSourceWithCallback: slot null or empty");
+            onLoaded(null);
+            return;
+        }
+        try {
+            slot.load(outcome -> switch outcome {
+                case SUCCESS(_):
+                    Debugger.log("Newgrounds.loadCloudGnomeSourceWithCallback: loaded",
+                        (slot.contents != null ? slot.contents.length : 0), "chars");
+                    onLoaded(slot.contents);
+                case FAIL(e):
+                    Debugger.log("Newgrounds.loadCloudGnomeSourceWithCallback: load failed", e);
+                    onLoaded(null);
+            });
+        } catch (e:Dynamic) {
+            Debugger.log("Newgrounds.loadCloudGnomeSourceWithCallback: slot.load threw", e);
+            onLoaded(null);
+        }
+    }
+
+    /**
      * Saves only if this score is better than what is already loaded, and
      * on a new best also posts to the Newgrounds scoreboard so the run
      * shows up on the leaderboard. Defers the whole comparison if slots
@@ -393,6 +469,44 @@ class Newgrounds {
             postHighScore(score);
         } else {
             Debugger.log("Newgrounds.saveBestCloudScore: not a new best", score, "<= current", best);
+        }
+    }
+
+    /**
+     * Unlocks the medal with the given id. No-op if:
+     *   - NG hasn't been initialized,
+     *   - the medal list hasn't loaded yet (defers via `onLoad`),
+     *   - the medal id isn't registered for this app,
+     *   - the medal is already unlocked server-side.
+     *
+     * Callers should still gate their own call sites on a local flag to avoid
+     * looking up the medal map every frame — this method is the SECOND line of
+     * defense, not the only one.
+     */
+    public static function unlockMedal(id:Int):Void {
+        if (NG.core == null || NG.core.medals == null) {
+            Debugger.log("Newgrounds.unlockMedal: NG not initialized, cannot unlock", id);
+            return;
+        }
+        if (NG.core.medals.state != Loaded) {
+            Debugger.log("Newgrounds.unlockMedal: medals not loaded yet, deferring", id);
+            NG.core.medals.onLoad.addOnce(function() unlockMedal(id));
+            return;
+        }
+        try {
+            final medal = NG.core.medals.get(id);
+            if (medal == null) {
+                Debugger.log("Newgrounds.unlockMedal: medal", id, "not registered for this app");
+                return;
+            }
+            if (medal.unlocked) {
+                Debugger.log("Newgrounds.unlockMedal: medal", id, "already unlocked, skipping");
+                return;
+            }
+            Debugger.log("Newgrounds.unlockMedal: unlocking", id, "(" + medal.name + ")");
+            medal.sendUnlock();
+        } catch (e:Dynamic) {
+            Debugger.log("Newgrounds.unlockMedal: threw for", id, e);
         }
     }
 

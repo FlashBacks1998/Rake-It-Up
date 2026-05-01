@@ -12,8 +12,8 @@
 	<haxelib name="haxeui-core" path="../haxeui-core" />
 	<haxelib name="haxeui-openfl" path="../haxeui-openfl" />
 	<haxelib name="actuate" />
+	<haxelib name="hscript" />
 
-	<!-- Phase 3 compiled stylesheet matcher (verified by test01 over many bursts) -->
 	<haxedef name="haxeui_compiled_matcher" />
 
 	<assets path="Assets" rename="assets" />

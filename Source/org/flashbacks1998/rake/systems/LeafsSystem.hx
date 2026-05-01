@@ -79,15 +79,14 @@ class LeafsSystem {
         _spLeavesFalling = spLeavesFalling;
         _spLeavesColorOffset = spLeavesColorOffset;
 
-        installPileSensorListenerOnce();
+        installSensor(_pileSensor);
     }
 
-    private function installPileSensorListenerOnce():Void {
-        if (_pileListenerInstalled) return;
-        _pileListenerInstalled = true;
-
-        // One listener, forever. No per-leaf listeners.
-        _pileSensor.addEventListener(Physics3DEventReachedSensor.TYPE, onPileSensorReached);
+    private var _sensors:Array<IPhysics3DObject> = [];
+    public function installSensor(sensor:IPhysics3DObject):Void {  
+        if(_sensors.indexOf(sensor) != -1) return; // already installed
+        sensor.addEventListener(Physics3DEventReachedSensor.TYPE, onPileSensorReached);
+        _sensors.push(sensor);
     }
 
     // -------------------------------------------------

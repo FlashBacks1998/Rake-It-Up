@@ -10,7 +10,7 @@ import openfl.Lib;
 import openfl.utils.Future;
 import openfl.utils.Promise;
 
-import org.flashbacks1998.debugger.Debugger; 
+import org.flashbacks1998.debugger.Debugger;
 
 class SceneManager extends Sprite {
 
@@ -19,7 +19,10 @@ class SceneManager extends Sprite {
     public static var scenes:StringMap<IScene> = new StringMap();
     public static var currentScene:IScene = null;
     public static var homescene:IScene = null;
-    public static var loadingScreen:Sprite = null;
+ 
+    public static var loadingScreen:ILoadingScreen = null;
+ 
+    public static var defaultTransition:ISceneTransition = null;
 
     public function new() {
         super();
@@ -28,28 +31,28 @@ class SceneManager extends Sprite {
     private function addScene(scene:IScene) {
         addChild(scene.asSprite());
     }
-    
+
     public function removeScene(scene:IScene) {
-        if(scene == null) {
-            Debugger.log("scene to remove is null");
+        if (scene == null) {
+            Debugger.log("removeScene: scene is null, nothing to remove");
             return;
         }
-
-        removeChild(scene.asSprite());
+        final s = scene.asSprite();
+        if (s.parent == this) removeChild(s);
     }
-    
-    public function addLoadingScreen(?loadingScreen:Sprite) {
-        final screen = loadingScreen ?? SceneManager.loadingScreen;
 
-        if(screen!=null)
-            addChild(screen);
+    public function addLoadingScreen(?loadingScreen:ILoadingScreen) {
+        final screen = loadingScreen ?? SceneManager.loadingScreen;
+        if (screen != null)
+            addChild(screen.asSprite());
     }
-    
-    public function removeLoadingScreen(?loadingScreen:Sprite) {
-        final screen = loadingScreen ?? SceneManager.loadingScreen;
 
-        if(screen!=null)
-            removeChild(screen);
+    public function removeLoadingScreen(?loadingScreen:ILoadingScreen) {
+        final screen = loadingScreen ?? SceneManager.loadingScreen;
+        if (screen != null) {
+            final s = screen.asSprite();
+            if (s.parent == this) removeChild(s);
+        }
     }
 
     public static function registerScene(id:String, scene:IScene):Void {
@@ -63,58 +66,77 @@ class SceneManager extends Sprite {
         }
         if (scenes.exists(id)) {
             Debugger.error('register("$id"): scene with the same id already exists');
-            return;    
+            return;
         }
-
         SceneManager.scenes.set(id, scene);
     }
-
-    public static function gotoScene(id:String) {
+ 
+    public static function gotoScene(id:String, ?transition:ISceneTransition):Void {
         final nextScene = scenes.get(id);
+        final t = transition ?? defaultTransition;
 
-        Debugger.log("Switching to scene", id, nextScene);
+        Debugger.log("SceneManager.gotoScene:", id, "(transition:", (t != null ? Type.getClassName(Type.getClass(t)) : "none") + ")");
 
-        if(nextScene == null)
-            throw new Exception("No scene found with the id", id);
+        if (nextScene == null)
+            throw new Exception('SceneManager.gotoScene: no scene registered with id "$id"');
+ 
+        if (t != null) {
+            t.coverOut(instance, () -> _loadScene(id, nextScene, t));
+        } else {
+            _loadScene(id, nextScene, null);
+        }
+    }
 
-        final chain = currentScene?.dispose() ?? Future.withValue(null);
+    private static function _loadScene(id:String, nextScene:IScene, transition:ISceneTransition):Void {
+        final prevScene = currentScene;
+ 
+        final disposeChain:Future<Dynamic> = (prevScene != null)
+            ? prevScene.dispose()
+            : Future.withValue(null);
 
         instance.addLoadingScreen();
 
-        final completeChain = chain
-            .onProgress((x,y)-> {
-                final e = new ProgressEvent(ProgressEvent.PROGRESS, false, false, x, y);
-                instance.dispatchEvent(e);
-                loadingScreen?.dispatchEvent(e);
-            })
-            .onComplete((scene)->instance.removeScene(scene))
-        .then((_)->nextScene.init())
-            .onProgress((x,y)-> {
-                final e = new ProgressEvent(ProgressEvent.PROGRESS, false, false, x, y);
-                instance.dispatchEvent(e);
-                loadingScreen?.dispatchEvent(e);
-            })
-            .onComplete(scene->{
-                Debugger.log("scene " + id + " has sucessfully been loaded, cleaning up...");
-                instance.dispatchEvent(new Event(Event.COMPLETE));
-                //TODO: dispatch complete to loading screen and have that prevent default or not
+        disposeChain 
+            .onComplete(_ -> {
+                if (prevScene != null) instance.removeScene(prevScene);
+            }) 
+            .then(_ -> nextScene.init()) 
+            .onProgress((x, y) -> {
+                final progress = (y > 0.0) ? x / y : 0.0;
+                transition?.onLoadProgress(progress);
+                SceneManager.loadingScreen?.onProgress(x, y);
+                instance.dispatchEvent(new ProgressEvent(ProgressEvent.PROGRESS, false, false, x, y));
+            }) 
+            .onComplete(scene -> {
+                Debugger.log("SceneManager: scene", id, "loaded successfully");
+
+                SceneManager.loadingScreen?.onSceneReady();
                 instance.removeLoadingScreen();
                 instance.addScene(scene);
-            });
 
-        return completeChain;
+                // Fix: keep currentScene in sync with what is actually on screen.
+                //pos
+                currentScene = scene;
+
+                instance.dispatchEvent(new Event(Event.COMPLETE));
+
+                // Step 4 — Reveal transition (if any).
+                if (transition != null) {
+                    transition.revealIn(instance, () -> {
+                        Debugger.log("SceneManager: reveal complete for scene", id);
+                    });
+                }
+            });
     }
 
     public static function getSceneId(scene:IScene):Null<String> {
         for (id in scenes.keys()) {
-            if (scenes.get(id) == scene) {
-                return id; // found
-            }
+            if (scenes.get(id) == scene) return id;
         }
-        return null; // not found
+        return null;
     }
 
-    public static function gotoHomeScene() {
-        return gotoScene(getSceneId(homescene));
+    public static function gotoHomeScene():Void {
+        gotoScene(getSceneId(homescene));
     }
 }

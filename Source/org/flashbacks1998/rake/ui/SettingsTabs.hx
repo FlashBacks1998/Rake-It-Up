@@ -67,32 +67,54 @@ import openfl.net.URLRequest;
 
         <vbox text="Credits" styleName="settings-panel">
 
-            <vbox styleName="settings-section">
-                <label text="Audio" styleName="section-header" />
-                <vbox styleName="settings-row">
-                    <label text="Creator Assets — 8-Bit Coin Sound Effect (Copyright Free)" styleName="settings-label" />
-                    <link id="linkCoinSfx" text="https://www.youtube.com/watch?v=5v20ztxGvQ0" styleName="credit-url" />
-                </vbox>
-                <vbox styleName="settings-row">
-                    <label text="Gravidi — Nat King Cole: Autumn Leaves Lofi Cover" styleName="settings-label" />
-                    <link id="linkAutumnLeaves" text="https://www.newgrounds.com/audio/listen/911253" styleName="credit-url" />
-                </vbox>
-            </vbox>
+            <scrollview width="100%" height="100%" contentWidth="100%" styleName="credits-scroll">
+                <vbox width="100%" styleName="credits-scroll-contents">
 
-            <vbox styleName="settings-section">
-                <label text="3D Models" styleName="section-header" />
-                <vbox styleName="settings-row">
-                    <label text="TODO: Ive worked on this project for so long I cant even find where I got them from" styleName="settings-label" />
-                </vbox>
-            </vbox>
+                    <vbox styleName="settings-section">
+                        <label text="Audio" styleName="section-header" />
+                        <vbox styleName="settings-row">
+                            <label text="Creator Assets — 8-Bit Coin Sound Effect (Copyright Free)" styleName="settings-label" />
+                            <link id="linkCoinSfx" text="https://www.youtube.com/watch?v=5v20ztxGvQ0" styleName="credit-url" />
+                        </vbox>
+                        <vbox styleName="settings-row">
+                            <label text="Gravidi — Nat King Cole: Autumn Leaves Lofi Cover" styleName="settings-label" />
+                            <link id="linkAutumnLeaves" text="https://www.newgrounds.com/audio/listen/911253" styleName="credit-url" />
+                        </vbox>
+                    </vbox>
 
-            <vbox styleName="settings-section">
-                <label text="Fonts" styleName="section-header" />
-                <vbox styleName="settings-row">
-                    <label text="PixelTactical-AWOx" styleName="settings-label" />
-                    <link id="linkPixelTactical" text="https://www.dafont.com/pixel-tactical.font" styleName="credit-url" />
+                    <vbox styleName="settings-section">
+                        <label text="3D Models" styleName="section-header" />
+                        <vbox styleName="settings-row">
+                            <label text="Arrangemonk — Garden Gnome" styleName="settings-label" />
+                            <link id="linkGnomeModel" text="https://sketchfab.com/3d-models/garden-gnome-49d2473cbab64bc2b334fa8dc42aa181" styleName="credit-url" />
+                        </vbox>
+                        <vbox styleName="settings-row">
+                            <label text="TODO: Ive worked on this project for so long I cant even find where I got them from" styleName="settings-label" />
+                        </vbox>
+                    </vbox>
+
+                    <vbox styleName="settings-section">
+                        <label text="Textures" styleName="section-header" />
+                        <vbox styleName="settings-row">
+                            <label text="Nendra Wahyu — Fullscreen icon" styleName="settings-label" />
+                            <link id="linkFullscreenIcon" text="https://www.flaticon.com/free-icon/fullscreen_6398940" styleName="credit-url" />
+                        </vbox>
+                        <vbox styleName="settings-row">
+                            <label text="Freepik — Gnome icon" styleName="settings-label" />
+                            <link id="linkGnomeIcon" text="https://www.flaticon.com/free-icon/gnome_3831659" styleName="credit-url" />
+                        </vbox>
+                    </vbox>
+
+                    <vbox styleName="settings-section">
+                        <label text="Fonts" styleName="section-header" />
+                        <vbox styleName="settings-row">
+                            <label text="PixelTactical-AWOx" styleName="settings-label" />
+                            <link id="linkPixelTactical" text="https://www.dafont.com/pixel-tactical.font" styleName="credit-url" />
+                        </vbox>
+                    </vbox>
+
                 </vbox>
-            </vbox>
+            </scrollview>
 
         </vbox>
 
@@ -124,6 +146,9 @@ class SettingsTabs extends Absolute {
 
         wireCreditLink(linkCoinSfx);
         wireCreditLink(linkAutumnLeaves);
+        wireCreditLink(linkGnomeModel);
+        wireCreditLink(linkFullscreenIcon);
+        wireCreditLink(linkGnomeIcon);
         wireCreditLink(linkPixelTactical);
 
         closeBtn.registerEvent(MouseEvent.CLICK, onCloseClick);

@@ -19,7 +19,7 @@ import org.flashbacks1998.ui.styles.ProgressBarStyle;
 import org.flashbacks1998.ui.styles.TextboxStyle;
 import org.flashbacks1998.debugger.DebuggerConsole;
 
-class Preloader extends Sprite {
+class Preloader extends Sprite implements org.flashbacks1998.scenes.ILoadingScreen {
     private static final bgcolor:Int = 0xE39A5A;
 
     // Live UI (vector/text) is here
@@ -37,8 +37,7 @@ class Preloader extends Sprite {
     private var consoleStyle:TextboxStyle;
 
     private var padding:Int = 10;
-
-    // Fade state (ENTER_FRAME)
+ 
     private var fadeDurationMs:Int = 2000;
     private var fadeStartMs:Float = 0;
     private var fading:Bool = false;
@@ -48,7 +47,28 @@ class Preloader extends Sprite {
 
         addEventListener(Event.ADDED_TO_STAGE, onAddedToStage);
         addEventListener(Event.COMPLETE, onComplete);
-        addEventListener(ProgressEvent.PROGRESS, onProgress);
+        addEventListener(ProgressEvent.PROGRESS, _onNativeProgress);
+    }
+
+    // -------------------------
+    // ILoadingScreen
+    // -------------------------
+
+    public function asSprite():openfl.display.Sprite {
+        return this;
+    }
+ 
+    public function onProgress(loaded:Float, total:Float):Void {
+        update(total > 0 ? loaded / total : 0);
+    }
+ 
+    public function onSceneReady():Void {
+        update(1); 
+        if (Lib.current != null && Lib.current.stage != null) {
+            Lib.current.stage.addChild(this);
+        }
+
+        startFadeout();
     }
 
     private function onAddedToStage(e:Event):Void {
@@ -87,9 +107,7 @@ class Preloader extends Sprite {
 
     private function onResize(e:Event):Void {
         layout();
-
-        // Optional: If you *can* resize mid-fade and want correctness, rebuild snapshot.
-        // If you don't care about that edge-case, delete this block.
+ 
         if (fading) buildFadeSnapshot();
     }
 
@@ -161,21 +179,16 @@ class Preloader extends Sprite {
         consoleStyle.height = Std.int(stage.stageHeight * 0.30);
 
         console = new DebuggerConsole(consoleStyle);
-
-        // IMPORTANT: add to contentLayer (so snapshot captures it)
+ 
         contentLayer.addChild(console);
 
         layout();
     }
-
-    // -------------------------
-    // Snapshot fade optimization
-    // -------------------------
+ 
 
     private function buildFadeSnapshot():Void {
         if (contentLayer == null) return;
-
-        // Hide fade layer while drawing so we don't include it
+ 
         fadeLayer.visible = false;
 
         var bounds:Rectangle = contentLayer.getBounds(contentLayer);
@@ -208,25 +221,18 @@ class Preloader extends Sprite {
 
         fadeLayer.alpha = 1;
         fadeLayer.visible = true;
-
-        // Hide live UI so text stops getting re-rasterized during fade
+ 
         contentLayer.visible = false;
     }
 
     private function startFadeout():Void {
         if (fading) return;
         fading = true;
-
-        // Stop console from doing string building / text updates during fade
-        //if (console != null) console.pause();
-
-        // Snapshot once
+  
         buildFadeSnapshot();
-
-        // Start time
+ 
         fadeStartMs = Lib.getTimer();
-
-        // Fade via ENTER_FRAME (no Timer allocations / dispatch)
+ 
         addEventListener(Event.ENTER_FRAME, onFadeFrame);
 
         this.mouseEnabled = false;
@@ -272,22 +278,15 @@ class Preloader extends Sprite {
 
     private function onComplete(event:Event):Void {
         update(1);
-
+ 
         Lib.current.stage.addChild(this);
+ 
+        SceneManager.loadingScreen = this;
 
         addDebugConsole();
-
-        SceneManager.instance.addEventListener(ProgressEvent.PROGRESS, (e:ProgressEvent) -> {
-            update(e.bytesTotal > 0 ? (e.bytesLoaded / e.bytesTotal) : 0);
-        });
-
-        SceneManager.instance.addEventListener(Event.COMPLETE, (e) -> {
-            Debugger.log("Preloader is done");
-            startFadeout();
-        });
     }
 
-    private function onProgress(event:ProgressEvent):Void {
+    private function _onNativeProgress(event:ProgressEvent):Void {
         if (event.bytesTotal <= 0) update(0);
         else update(event.bytesLoaded / event.bytesTotal);
     }

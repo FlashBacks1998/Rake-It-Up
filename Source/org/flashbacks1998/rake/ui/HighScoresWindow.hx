@@ -71,7 +71,7 @@ class HighScoresWindow extends Absolute {
         boardBox.hide();
 
         Newgrounds.requestHighScores(
-            10,
+            20,
             scores -> {
                 final ds = new ArrayDataSource<Dynamic>();
 

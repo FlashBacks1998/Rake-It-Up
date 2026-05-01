@@ -476,6 +476,167 @@
     padding: 0;
 }
 
+/*-----------------------------------------------------------
+  WINDOW FOOTER (action row at the bottom of .window-body).
+  Neutral container — sits transparently on the window-body
+  background so the footer reads as part of the body, not as
+  a separate panel. Use with .window-btn-primary / -secondary.
+-----------------------------------------------------------*/
+.window-footer {
+    width: 100%;
+    height: auto;
+
+    padding-top: 6px;
+    padding-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
+
+    spacing: 10px;
+
+    vertical-align: center;
+    background-color: none;
+}
+
+/*-----------------------------------------------------------
+  WINDOW TEXTAREA — full-body editor inside a .window-body.
+  Same dark-warm gradient + warm-border treatment as
+  .highscores-table; intended for places where the user types
+  free-form content (e.g. the gnome hscript editor).
+-----------------------------------------------------------*/
+.window-textarea {
+    width: 100%;
+    height: 100%;
+
+    background-color: #1A110C;
+    background-color-end: #14100A;
+
+    border: 1px solid #5E3F2C;
+    border-radius: 10px;
+
+    padding: 10px;
+
+    color: #F2E4D2;
+    font-size: 24px;
+}
+
+.window-textarea:active {
+    border-color: #A97856;
+}
+
+/*-----------------------------------------------------------
+  WINDOW BUTTONS — primary / secondary footer actions.
+  Primary uses the warm orange gradient that matches the
+  SliderUI thumb / range-value (CTA prominence). Secondary
+  uses the dark warm-brown palette that matches the unselected
+  tabbar buttons (lower prominence).
+-----------------------------------------------------------*/
+.window-btn-primary {
+    background-color: #FF9A3C;
+    background-color-end: #FF6B2E;
+
+    border: 1px solid #FFB06A;
+    border-radius: 12px;
+
+    padding-left: 22px;
+    padding-right: 22px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+
+    color: #FFF8EE;
+    font-size: 14px;
+    font-bold: true;
+
+    cursor: pointer;
+    vertical-align: center;
+
+    filter: drop-shadow(0, 2, #000000, 0.35, 4, 4);
+}
+
+.window-btn-primary:hover {
+    background-color: #FFB564;
+    background-color-end: #FF8545;
+    border-color: #FFCE95;
+}
+
+.window-btn-primary:down,
+.window-btn-primary:active {
+    background-color: #D9771F;
+    background-color-end: #B5521A;
+    border-color: #F0A06A;
+}
+
+.window-btn-secondary {
+    background-color: #4B3120;
+    background-color-end: #2B190E;
+
+    border: 1px solid #75513A;
+    border-radius: 12px;
+
+    padding-left: 22px;
+    padding-right: 22px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+
+    color: #D8B28A;
+    font-size: 14px;
+    font-bold: true;
+
+    cursor: pointer;
+    vertical-align: center;
+}
+
+.window-btn-secondary:hover {
+    background-color: #64412B;
+    background-color-end: #392115;
+    border-color: #A97856;
+    color: #FFE2BA;
+}
+
+.window-btn-secondary:down,
+.window-btn-secondary:active {
+    background-color: #2D1A10;
+    background-color-end: #1A0F08;
+    border-color: #5A3D29;
+}
+
+/*===========================================================
+  GNOME STATUS WINDOW
+  Mirrors the status / substatus / *-error pattern used by
+  HighScoresWindow, but with a success variant tinted green so
+  upload + parse outcomes read at a glance.
+===========================================================*/
+.gnome-status-box {
+    width: 100%;
+    spacing: 6px;
+    padding: 4px;
+    background-color: none;
+}
+
+.gnome-status {
+    font-size: 16px;
+    font-bold: true;
+    color: #FFF8EE;
+    background-color: none;
+}
+
+.gnome-substatus {
+    font-size: 13px;
+    color: #D8B28A;
+    background-color: none;
+}
+
+.gnome-status-success {
+    color: #B5E1A1;
+}
+
+.gnome-status-error {
+    color: #F0B7B7;
+}
+
+.gnome-substatus-error {
+    color: #E7B0B0;
+}
+
 /*===========================================================
   HIGHSCORES WINDOW
 ===========================================================*/
@@ -704,5 +865,98 @@
 
 .highscores-table .scroll:disabled .button,
 .highscores-table .scroll:disabled .thumb {
+    opacity: 0.4;
+}
+
+/*===========================================================
+  CREDITS SCROLLVIEW
+  Reuses the highscores scroll palette so the bar reads as
+  the same control everywhere — same dark warm-brown track
+  with an orange gradient thumb, same hover/down states.
+  Scoped to .credits-scroll so the rules don't bleed into
+  any other scrollview elsewhere.
+===========================================================*/
+.credits-scroll {
+    background-color: none;
+    border: none;
+    border-size: 0;
+    padding: 0;
+}
+
+/* Inner content vbox — keeps the section spacing the
+   .settings-panel used to provide before we wrapped its
+   children in a scrollview, plus a little right-padding so
+   the 14px scrollbar doesn't clip the section borders. */
+.credits-scroll-contents {
+    spacing: 16px;
+    padding-right: 8px;
+    background-color: none;
+}
+
+.credits-scroll .scroll {
+    background-color: #1A110C;
+    border: none;
+    border-size: 0;
+    padding: 0;
+}
+
+.credits-scroll .vertical-scroll {
+    width: 14px;
+    padding-left: 0;
+    border: none;
+    border-size: 0;
+
+    background-color: #24160F;
+    background-color-end: #18100B;
+
+    border-left-size: 1px;
+    border-left-color: #5E3F2C;
+}
+
+.credits-scroll .horizontal-scroll {
+    height: 14px;
+    padding-top: 0;
+    border: none;
+    border-size: 0;
+
+    background-color: #24160F;
+    background-color-end: #18100B;
+
+    border-top-size: 1px;
+    border-top-color: #5E3F2C;
+}
+
+.credits-scroll .scroll .button,
+.credits-scroll .scroll .thumb {
+    width: 10px;
+
+    background-color: #FF9A3C;
+    background-color-end: #FF6B2E;
+
+    border-size: 1px;
+    border-color: #FFB06A;
+    border-radius: 6px;
+
+    opacity: 1;
+    filter: drop-shadow(0, 2, #000000, 0.35, 4, 4);
+}
+
+.credits-scroll .scroll .button:hover,
+.credits-scroll .scroll .thumb:hover {
+    background-color: #FFB564;
+    background-color-end: #FF8545;
+    border-color: #FFCE95;
+    opacity: 1;
+}
+
+.credits-scroll .scroll .button:down,
+.credits-scroll .scroll .thumb:down {
+    background-color: #D9771F;
+    background-color-end: #B5521A;
+    border-color: #F0A06A;
+}
+
+.credits-scroll .scroll:disabled .button,
+.credits-scroll .scroll:disabled .thumb {
     opacity: 0.4;
 }

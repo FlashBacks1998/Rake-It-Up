@@ -1,5 +1,6 @@
 package org.flashbacks1998.rake.scenes.tests;
 
+import org.flashbacks1998.scenes.IScene;
 import motion.Actuate;
 
 import openfl.display.Shape;
@@ -51,6 +52,10 @@ import org.flashbacks1998.rake.ui.HighScoresBtn;
 import org.flashbacks1998.rake.ui.RakeBtn;
 import org.flashbacks1998.rake.ui.SettingsBtn;
 import org.flashbacks1998.rake.ui.SettingsTabs;
+import org.flashbacks1998.rake.ui.GnomeBtn;
+import org.flashbacks1998.rake.ui.GnomeEditWindow;
+import org.flashbacks1998.rake.ui.GnomeStatusWindow;
+import org.flashbacks1998.rake.systems.GnomeSystem;
 
 import org.flashbacks1998.world3d.World3D;
 import org.flashbacks1998.world3d.postprocessing.PostProcessing;
@@ -83,6 +88,7 @@ import org.flashbacks1998.newgrounds.Newgrounds;
 
 class SceneTestSR01 extends Scene {
 	public var eTree:Entity3D;
+    public var eGnome:Entity3D;
 	public var ePileOfLeaves:Entity3D;
 	public var ePlane:IEntity3D;
 	public var eNewRake:Entity3D;
@@ -102,12 +108,20 @@ class SceneTestSR01 extends Scene {
     public var score = 1000;
     var cloudSaveTimer:haxe.Timer;
 
+    /**
+     * Local de-dupe for the "Passed the starting line." Newgrounds medal —
+     * flips true the first time `score >= 10000`. Prevents us from looking up
+     * NG.core.medals.get(id) on every leaf collected after the threshold.
+     */
+    private var _medalPassedStartingLineAwarded:Bool = false;
+
     ///---PHYSICS 3D----------------------------------------------------------------
     public var bodyPileOfLeaves:Physics3DObjectCylinder;
     public var bodyTree:Physics3DObjectCylinder;
     public var physics:Physics3D;
 
     // Rake physics
+    var bodyGnome:Physics3DObjectBox;
     public var bodyRake:Physics3DObjectBox;
     private static final cursorW:Float = 4.0;
     private static final cursorH:Float = 1.0;
@@ -136,8 +150,10 @@ class SceneTestSR01 extends Scene {
     public var btnRakeToggle:RakeBtn;
     public var btnSettingsToggle:SettingsBtn;
     public var btnHighScoresToggle:HighScoresBtn;
+    public var btnGnomeToggle:GnomeBtn;
     var cameraSliderUI:SliderUI;
     private var sprMagnifier:Sprite;
+    private var sprFullscreen:Sprite;
     private var txtScore:TextField;
     private var sprTutorialBackground:Shape;
     private var mcButtons:MovieClip;
@@ -151,9 +167,13 @@ class SceneTestSR01 extends Scene {
     private var mainScreen:Absolute;
     private var settingsScreen:Absolute;
     private var highScoresScreen:Absolute;
+    private var gnomeScreen:Absolute;
     private var sprDebugStats:DebuggerStats;
     public var viewSettingsTab:SettingsTabs;
     public var viewHighScores:HighScoresWindow;
+    public var viewGnomeEdit:GnomeEditWindow;
+    public var viewGnomeStatus:GnomeStatusWindow;
+    public var gnomeSystem:GnomeSystem;
 
     private var _sBackgroundMusic:Sound;
     private var _scBackgroundMusic:SoundChannel;
@@ -205,15 +225,29 @@ class SceneTestSR01 extends Scene {
         return FutureUtil.all(futures);
     }
 
-    public function onAddedToStage(?e:openfl.events.Event) {
+    public override function onAddedToStage(e:Event) {
         Debugger.log("onAddedToStage: updating ui and playing background music");
-        
-        Actuate.tween (tutorialContainer, 1, { alpha: 0 }).delay (8);
 
-        updateUIPosition(); 
- 
-        if (_sBackgroundMusic != null) 
+        Actuate.tween(tutorialContainer, 1, { alpha: 0 }).delay(8);
+
+        updateUIPosition();
+
+        if (_sBackgroundMusic != null)
             _scBackgroundMusic = _sBackgroundMusic.play(0, 0);
+    }
+
+    public override function onRemovedFromStage(e:Event) {
+        Debugger.log("SceneTestSR01.onRemovedFromStage: cleaning up stage listeners");
+        Lib.current.stage.removeEventListener(MouseEvent.MOUSE_WHEEL, onMouseScrollToZoomCamera);
+        Lib.current.stage.removeEventListener(MouseEvent.MOUSE_MOVE, onMouseMoveToUpdateRakePosition);
+        if (_scBackgroundMusic != null) {
+            _scBackgroundMusic.stop();
+            _scBackgroundMusic = null;
+        }
+        if (cloudSaveTimer != null) {
+            cloudSaveTimer.stop();
+            cloudSaveTimer = null;
+        }
     }
 
     public function initWorld():Future<Any> {
@@ -279,7 +313,8 @@ class SceneTestSR01 extends Scene {
             return Future.withValue(eTree);
         });
 
-        Debugger.log("Loading Treed.obj...");
+        //rake obj
+        Debugger.log("Loading rake.obj...");
         final fTreePipeline = Assets.loadText("assets/objects/rake.obj").then(c -> {
             Debugger.log("Treed.obj loaded ", (c != null ? c.length : -1));
             var parserRake = new ObjParser(c);
@@ -299,8 +334,27 @@ class SceneTestSR01 extends Scene {
             return Future.withValue(eNewRake);
         });
 
-        // Load rake OBJ
-        Debugger.log("Loading rake.obj...");
+
+        //gnome obj
+        Debugger.log("Loading gnome.obj...");
+        final fGnomePipeline = Assets.loadText("assets/objects/garden_gnome.obj").then(c -> {
+            Debugger.log("gnome.obj loaded ", (c != null ? c.length : -1));
+            var parserGnome = new ObjParser(c);
+            Debugger.log("ObjParser created for gnome.obj, starting parse");
+            parserGnome.start();
+            return parserGnome.future;
+        }).then(e -> {
+            final entities:Vector<IEntity3D> = cast e;
+
+            final eOpt = Entity3DOptimizer.optimizeEntity3Ds(entities, { combineEntity3DMeshes: true });
+            eGnome = cast eOpt[0]; 
+            world.addChild(eGnome);
+
+            eGnome.position = bodyGnome.position;
+            eGnome.position.y = 0;
+
+            return Future.withValue(eGnome);
+        });
         
         return FutureUtil.all([fTreePipeline]).then(_ -> Future.withValue(0));
     }
@@ -351,14 +405,30 @@ class SceneTestSR01 extends Scene {
         bodyTree = new Physics3DObjectCylinder(new Position3D(), 1, 15, true);
         physics.addObject(bodyTree);
 
+        // Gnome body
+        bodyGnome = new Physics3DObjectBox(new Position3D(), 1, 1, 1, true);
+        bodyGnome.isStatic = true;
+        bodyGnome.isKinematic = false;
+        bodyGnome.isSensor = true; 
+        bodyGnome.ignoreGroup.push(bodyRake); 
+        bodyGnome.ignoreGroup.push(bodyPileOfLeaves);
+        bodyGnome.ignoreGroup.push(bodyTree);
+        bodyGnome.addEventListener(Physics3DEventReachedSensor.TYPE, onLeafSensorReached);
+        physics.addObject(bodyGnome);
+
         // Build leaf system
         leafsSystem = new LeafsSystem(world, physics, _mLeaf, bodyPileOfLeaves, _spPulsingLeavesShader, _spLeavesFalling, _spLeavesColorOffset);
+        leafsSystem.installSensor(bodyGnome);
 
         // Spawn starter batch
         for (i in 0...10)
             leafsSystem.spawnNewLeaf();
 
         Debugger.log("LeafsSystem initialized + initial leaves spawned");
+
+        // gnome system
+        gnomeSystem = new GnomeSystem();
+        gnomeSystem.setPosition(bodyGnome.position);
 
         return Future.withValue(physics);
     }
@@ -391,6 +461,12 @@ class SceneTestSR01 extends Scene {
         highScoresScreen.percentWidth = 100;
         highScoresScreen.percentHeight = 100;
 
+        // Gnome edit screen — same Stack-frame pattern as settings / highscores.
+        gnomeScreen = new Absolute();
+        gnomeScreen.id = "gnomeScreen";
+        gnomeScreen.percentWidth = 100;
+        gnomeScreen.percentHeight = 100;
+
         // Rake button
         btnRakeToggle = new RakeBtn();
         btnRakeToggle.registerEvent(HxUIMouseEvent.CLICK, onRakeToggleClick);
@@ -405,6 +481,11 @@ class SceneTestSR01 extends Scene {
         btnHighScoresToggle = new HighScoresBtn();
         btnHighScoresToggle.registerEvent(HxUIMouseEvent.CLICK, onHighScoresToggleClick);
         mainScreen.addComponent(btnHighScoresToggle);
+
+        // Gnome edit button — opens the gnomeScreen frame in screenStack.
+        btnGnomeToggle = new GnomeBtn();
+        btnGnomeToggle.registerEvent(HxUIMouseEvent.CLICK, onGnomeToggleClick);
+        mainScreen.addComponent(btnGnomeToggle);
 
         // Score text
         txtScore = new TextField();
@@ -443,6 +524,18 @@ class SceneTestSR01 extends Scene {
         sprMagnifier.addChild(mgBmp);
         mainScreen.addChild(sprMagnifier);
 
+        // Fullscreen toggle — bare icon (no .game-button background) sitting
+        // to the RIGHT of the zoom slider. Click toggles stage fullscreen.
+        sprFullscreen = new Sprite();
+        var fsBmp = new openfl.display.Bitmap(Assets.getBitmapData("assets/textures/fullscreen.png"));
+        fsBmp.smoothing = true;
+        fsBmp.width = fsBmp.height = 28;
+        sprFullscreen.addChild(fsBmp);
+        sprFullscreen.buttonMode = true;
+        sprFullscreen.useHandCursor = true;
+        sprFullscreen.addEventListener(MouseEvent.CLICK, onFullscreenToggleClick);
+        mainScreen.addChild(sprFullscreen);
+
         // Settings tab view
         viewSettingsTab = new SettingsTabs();
         viewSettingsTab.onClose = onSettingsClose;
@@ -465,6 +558,24 @@ class SceneTestSR01 extends Scene {
         viewHighScores = new HighScoresWindow();
         viewHighScores.onClose = onHighScoresClose;
         highScoresScreen.addComponent(viewHighScores);
+
+        // Gnome edit window + system — system owns the hscript source, the
+        // window is its UI surface. attachWindow seeds the textarea and wires
+        // the Reset / Update footer buttons to GnomeSystem handlers.
+        viewGnomeEdit = new GnomeEditWindow();
+        gnomeScreen.addComponent(viewGnomeEdit);
+        gnomeSystem.attachWindow(viewGnomeEdit);
+
+        // Status surface — workaround for the broken NotificationManager.
+        // Added AFTER viewGnomeEdit so it stacks on top in z-order. Starts
+        // hidden; only appears when GnomeSystem reports a result.
+        viewGnomeStatus = new GnomeStatusWindow();
+        gnomeScreen.addComponent(viewGnomeStatus);
+        gnomeSystem.attachStatusWindow(viewGnomeStatus);
+
+        // X (close) — override the window's default `hide()` so it routes back
+        // to mainScreen via the screenStack, matching settings / highscores.
+        viewGnomeEdit.closeButton.onClick = _ -> onGnomeClose();
 
         // Tutorial Library
         sprTutorialBackground = new Shape();
@@ -496,17 +607,18 @@ class SceneTestSR01 extends Scene {
             return FutureUtil.all([fButtons, fMouse, fZoom]).then(_->Future.withValue(tutorialContainer));
         });
 
-        // Wire frames into the stack — main shows first. 
+        // Wire frames into the stack — main shows first.
         screenStack.addComponent(mainScreen);
         screenStack.addComponent(settingsScreen);
         screenStack.addComponent(highScoresScreen);
+        screenStack.addComponent(gnomeScreen);
         screenStack.selectedId = "mainScreen";
 
         //updateUIPosition();
 
-        addEventListener(Event.ADDED_TO_STAGE, onAddedToStage);
+        // ADDED_TO_STAGE and RESIZE are auto-wired by Scene base class.
+        // Only wire non-lifecycle stage listeners here.
         addEventListener(Event.ENTER_FRAME, onEnterFrame);
-        Lib.current.stage.addEventListener(Event.RESIZE, onStageResize);
         Lib.current.stage.addEventListener(MouseEvent.MOUSE_WHEEL, onMouseScrollToZoomCamera);
 
         return FutureUtil.all([fAssetsTutorial]).then(_ -> Future.withValue(Lib.current.stage));
@@ -594,34 +706,52 @@ class SceneTestSR01 extends Scene {
         btnHighScoresToggle.left = 8;
         btnHighScoresToggle.top  = 16 + 72 + 16 + 72 + 16;
 
+        // Gnome button — one more 88px step below the high scores button.
+        // top = highscores.top + (highscores.height + gap) = 192 + 88 = 280
+        btnGnomeToggle.left = 8;
+        btnGnomeToggle.top  = 16 + 72 + 16 + 72 + 16 + 72 + 16;
+
         txtScore.width = 250;
         txtScore.x = Lib.current.stage.stageWidth - txtScore.width - 8;
         txtScore.y = 4;
 
         sprDebugStats.x = 8;
         sprDebugStats.y = Lib.current.stage.stageHeight - sprDebugStats.height - 8;
+ 
+        sprFullscreen.x = Lib.current.stage.stageWidth - sprFullscreen.width - 12;
 
-        cameraSliderUI.x = Lib.current.stage.stageWidth - cameraSliderUI.barWidth - 12;
+        cameraSliderUI.x = sprFullscreen.x - cameraSliderUI.barWidth - 12;
         cameraSliderUI.y = (Lib.current.stage.stageHeight - cameraSliderUI.barHeight) - 24;
+
+        sprFullscreen.y = cameraSliderUI.y + (cameraSliderUI.barHeight - sprFullscreen.height) / 2;
 
         sprMagnifier.x = cameraSliderUI.x - sprMagnifier.width - 12;
         sprMagnifier.y = cameraSliderUI.y + (cameraSliderUI.barHeight - sprMagnifier.height) / 2;
 
         viewSettingsTab.width = Lib.current.stage.stageWidth * .9;
         viewSettingsTab.height = Lib.current.stage.stageHeight * .9;
-        // .left/.top (not .x/.y): viewSettingsTab is inside the settingsScreen
-        // Absolute container; same layout-override issue as the buttons above.
+        
         viewSettingsTab.left = (Lib.current.stage.stageWidth  - viewSettingsTab.width)  / 2;
         viewSettingsTab.top  = (Lib.current.stage.stageHeight - viewSettingsTab.height) / 2;
-        // No viewSettingsTab.hidden = true here — Stack.selectedId="mainScreen"
-        // in initStage already hides the settingsScreen frame (which contains
-        // viewSettingsTab) until the user opens settings.
 
         // High scores window — same centered-90%-of-stage layout.
         viewHighScores.width  = Lib.current.stage.stageWidth  * .9;
         viewHighScores.height = Lib.current.stage.stageHeight * .9;
         viewHighScores.left = (Lib.current.stage.stageWidth  - viewHighScores.width)  / 2;
         viewHighScores.top  = (Lib.current.stage.stageHeight - viewHighScores.height) / 2;
+
+        // Gnome edit window — same centered-90%-of-stage layout.
+        viewGnomeEdit.width  = Lib.current.stage.stageWidth  * .9;
+        viewGnomeEdit.height = Lib.current.stage.stageHeight * .9;
+        viewGnomeEdit.left = (Lib.current.stage.stageWidth  - viewGnomeEdit.width)  / 2;
+        viewGnomeEdit.top  = (Lib.current.stage.stageHeight - viewGnomeEdit.height) / 2;
+
+        // Gnome status window — toast-style overlay in the top-right of the
+        // gnome screen. Sits on top of the edit window when shown.
+        viewGnomeStatus.width  = Lib.current.stage.stageWidth  * .35;
+        viewGnomeStatus.height = Lib.current.stage.stageHeight * .22;
+        viewGnomeStatus.left = Lib.current.stage.stageWidth  - viewGnomeStatus.width  - 32;
+        viewGnomeStatus.top  = 32;
 
 
         sprTutorialBackground.graphics.clear();
@@ -635,7 +765,7 @@ class SceneTestSR01 extends Scene {
         mcButtons.scaleX = mcButtons.scaleY = 0.8;
 
         mcZoom.x = sprMagnifier.x;
-        mcZoom.y = sprMagnifier.y - 90;
+        mcZoom.y = sprMagnifier.y - 116;
         mcZoom.scaleX = mcZoom.scaleY = 0.83;
 
         mcMouse.x = (Lib.current.stage.stageWidth - mcMouse.width) / 2;
@@ -657,6 +787,26 @@ class SceneTestSR01 extends Scene {
         cameraDistance = MathUtil.clamp(cameraDistance, cameraDistanceMin, cameraDistanceMax);
         cameraSliderUI.value = cameraDistance;
         updateCameraDistance(cameraDistance);
+    }
+
+    /**
+     * Toggle stage fullscreen. Wrapped in try/catch because Flash refuses
+     * fullscreen requests when the SWF wasn't allowed to go fullscreen
+     * (e.g. missing wmode/embed permissions or no user-gesture trigger);
+     * we don't want a permission error to crash the click handler.
+     */
+    public function onFullscreenToggleClick(e:MouseEvent) {
+        final stage = Lib.current.stage;
+        try {
+            final fs = openfl.display.StageDisplayState.FULL_SCREEN_INTERACTIVE;
+            final normal = openfl.display.StageDisplayState.NORMAL;
+            final inFullscreen = (stage.displayState == fs)
+                || (stage.displayState == openfl.display.StageDisplayState.FULL_SCREEN);
+            stage.displayState = inFullscreen ? normal : fs;
+            Debugger.log("onFullscreenToggleClick: displayState ->", stage.displayState);
+        } catch (err:Dynamic) {
+            Debugger.log("onFullscreenToggleClick: failed to toggle", err);
+        }
     }
 
     public function onRakeToggleClick(e:HxUIMouseEvent) {
@@ -775,6 +925,24 @@ class SceneTestSR01 extends Scene {
         onHighScoresViewToggle(false);
     }
 
+    /**
+     * Show / hide the gnome edit screen — same camera-pause + screenStack
+     * routing pattern as settings / highscores. Public so an opener button
+     * (or hotkey) can call it; closing happens via the X handler below.
+     */
+    public function onGnomeViewToggle(visible:Bool) {
+        cameraController.enabled = !visible;
+        screenStack.selectedId = visible ? "gnomeScreen" : "mainScreen";
+    }
+
+    public function onGnomeToggleClick(e:HxUIMouseEvent) {
+        onGnomeViewToggle(true);
+    }
+
+    public function onGnomeClose():Void {
+        onGnomeViewToggle(false);
+    }
+
     public function onSettingsDebugFPSToggle(event:UIEvent) {
         final selected = cast(event.target, CheckBox).selected;
         if (selected == true && !Lib.current.stage.contains(sprDebugStats)) {
@@ -819,6 +987,14 @@ class SceneTestSR01 extends Scene {
         txtScore.text = "Score: " + score;
         Debugger.log("onLeafSensorReached: score now", score);
 
+        // Award the "Passed the starting line." medal the first time score
+        // crosses 10k. Local flag avoids spamming the NG medal lookup every
+        // 100-point bump after the threshold.
+        if (!_medalPassedStartingLineAwarded && score >= 10000) {
+            _medalPassedStartingLineAwarded = true;
+            Newgrounds.unlockMedal(Newgrounds.MEDAL_PASSED_STARTING_LINE);
+        }
+
         if (_sPoints != null && _sPoints.length > 0) {
             final rand = Math.floor(Math.random() * _sPoints.length);
             _sPoints[rand].play(0,0,_stPoints);
@@ -844,9 +1020,26 @@ class SceneTestSR01 extends Scene {
         world.bgColorB = (color1b + (color2b - color1b) * factor) / 255.0;
     }
 
-    public function onStageResize(e:Event) {
+    public override function onStageResize(e:Event) {
         updateUIPosition();
         world.resize(Lib.current.stage.stageWidth, Lib.current.stage.stageHeight);
+    }
+
+    public override function dispose():Future<IScene> {
+        Debugger.log("SceneTestSR01.dispose: cleaning up resources");
+
+        removeEventListener(Event.ENTER_FRAME, onEnterFrame);
+
+        if (world != null) {
+            world.dispose();
+            world = null;
+        }
+        // physics and leafsSystem do not have dispose() — just null them out
+        // so GC can collect them once this scene is no longer referenced.
+        physics = null;
+        leafsSystem = null;
+
+        return super.dispose();
     }
 
     public function onEnterFrame(e:Event) {
@@ -881,6 +1074,11 @@ class SceneTestSR01 extends Scene {
                 physics.step(_lastDt);
             }
             Debugger.physicsTTR = Lib.getTimer() - physicsStart;
+        }
+
+        // update gnome
+        if (gnomeSystem != null) {
+            gnomeSystem.update(now);
         }
 
         var wtrstart = Lib.getTimer();
